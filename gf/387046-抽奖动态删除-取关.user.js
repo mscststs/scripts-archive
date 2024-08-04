@@ -165,7 +165,7 @@
             for (const card of data.cards) {
                 offset = card.desc.dynamic_id_str;
 
-                if (card.desc.orig_dy_id_str != "0") { // 如果是转发动态
+                if (card.desc.orig_dy_id != 0) { // 如果是转发动态
                     try {
                         const content = JSON.parse(card.card);
                         const content2 = JSON.parse(content.origin_extend_json);
