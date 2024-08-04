@@ -7,7 +7,7 @@
 // @match        https://space.bilibili.com/*
 // @match        http://space.bilibili.com/*
 // @require https://greasyfork.org/scripts/38220-mscststs-tools/code/MSCSTSTS-TOOLS.js?version=713767
-// @require      https://cdn.bootcss.com/axios/0.17.1/axios.js
+// @require      https://cdn.jsdelivr.net/npm/axios@1.7.3/dist/axios.min.js
 // @icon         https://static.hdslb.com/images/favicon.ico
 // @license      MIT
 // @grant        none
