@@ -1,4 +1,4 @@
-/ ==UserScript==
+// ==UserScript==
 // @name         B站评论区开盒
 // @namespace    mscststs
 // @version      1.00
