@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         B站评论区开盒
 // @namespace    mscststs
-// @version      1.01
+// @version      1.02
 // @description  B站评论区直接展示 ip 属地
 // @author       mscststs
 // @match        *://*.bilibili.com/*
@@ -1138,7 +1138,7 @@ var utils = {
                 if( Ref2Index > Ref1Index  && Ref1Index >-1){
 
                     //ref 1
-                    code = code.replace(`<div id="pubdate">','</div>`, `<div id="pubdate">','</div><div id="location">','</div>`);
+                    code = code.replace(`<div id="pubdate">','</div>`, `<div id="pubdate">','</div><div id="location" style="margin-left:var(--kaihe-ml, 20px)">','</div>`);
 
                     //ref 2
                     code = code.replace(`this.pubDate,this.handleLike,`,`this.pubDate,(this.data && this.data.reply_control)? this.data.reply_control.location : null,this.handleLike,`);
