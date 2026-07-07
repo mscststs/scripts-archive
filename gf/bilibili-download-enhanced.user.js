@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 视频下载增强
 // @namespace    mscststs
-// @version      1.2.0
+// @version      1.2.1
 // @description  Bilibili 视频下载 - 支持选择视频/音频流，带进度显示
 // @license      ISC
 // @author       mscststs
@@ -18,9 +18,6 @@
     'use strict';
 
     const RemuxIframe = "https://tools.mscststs.com/tools/mp4-remux";
-
-    // AbortController for current download
-    let currentAbortController = null;
 
     // ==================== Styles ====================
     // All selectors strictly scoped with .bili-dl- prefix.
@@ -183,7 +180,6 @@
             color: #9499A0; transition: background 0.15s, color 0.15s;
         }
         .bili-dl-progress-btn:hover { background: #F1F2F3; color: #18191C; }
-        .bili-dl-progress-btn.bili-dl-btn-stop:hover { background: #FDE8E8; color: #F25F5C; }
         .bili-dl-progress-body { padding: 16px; }
         .bili-dl-progress-filename {
             font-size: 13px; color: #61666D; margin-bottom: 12px;
@@ -216,7 +212,6 @@
         }
         .bili-dl-progress-status.bili-dl-status-success { background: #E8F8E8; color: #2AC638; }
         .bili-dl-progress-status.bili-dl-status-error { background: #FDE8E8; color: #F25F5C; }
-        .bili-dl-progress-status.bili-dl-status-cancelled { background: #FFF3E0; color: #E65100; }
         .bili-dl-progress-tip {
             margin-top: 10px; padding: 6px 12px; border-radius: 6px;
             background: #FFF8E1; color: #F57F17;
@@ -499,7 +494,7 @@
 
     // ==================== Progress Panel ====================
 
-    function createProgressPanel(onCancel) {
+    function createProgressPanel() {
         let panel = document.querySelector('.bili-dl-progress');
         if (panel) panel.remove();
 
@@ -512,11 +507,6 @@
                     下载中
                 </div>
                 <div class="bili-dl-progress-actions">
-                    <button class="bili-dl-progress-btn bili-dl-btn-stop" title="取消下载">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <rect x="4" y="4" width="8" height="8" rx="1"/>
-                        </svg>
-                    </button>
                     <button class="bili-dl-progress-btn bili-dl-btn-min" title="最小化">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
                             <path d="M2 7h10v1H2z"/>
@@ -544,10 +534,6 @@
 
         panel.querySelector('.bili-dl-btn-min').addEventListener('click', () => {
             panel.classList.toggle('bili-dl-minimized');
-        });
-
-        panel.querySelector('.bili-dl-btn-stop').addEventListener('click', () => {
-            if (onCancel) onCancel();
         });
 
         document.body.appendChild(panel);
@@ -578,8 +564,6 @@
                 status.textContent = text;
                 status.className = 'bili-dl-progress-status bili-dl-status-' + type;
                 status.style.display = 'block';
-                const stopBtn = panel.querySelector('.bili-dl-btn-stop');
-                if (stopBtn) stopBtn.style.display = 'none';
                 const tip = panel.querySelector('.bili-dl-progress-tip');
                 if (tip) tip.style.display = 'none';
             },
@@ -638,7 +622,7 @@
      * We track bytes by reading the Content-Length of each range response
      * (pipeTo bypasses our code, so we count from HTTP headers instead).
      */
-    async function autoRangeFetch(url, signal) {
+    async function autoRangeFetch(url) {
         const step = 2097152 * 10; // 20MiB
         let controller = new AbortController();
 
@@ -660,8 +644,7 @@
                 while (true) {
                     try {
                         const res = await fetch(url, {
-                            headers: { "range": `bytes=${start}-${end}` },
-                            signal
+                            headers: { "range": `bytes=${start}-${end}` }
                         });
                         // Count this chunk's size from the response header
                         // BEFORE pipeTo consumes the body
@@ -670,7 +653,7 @@
                         progress.downloaded += chunkSize;
                         break;
                     } catch(e) {
-                        if (signal.aborted) throw e;
+                        throw e;
                     }
                 }
             }
@@ -719,17 +702,7 @@
     }
 
     async function startDownload(videoStream, audioStream, title) {
-        if (currentAbortController) {
-            currentAbortController.abort();
-        }
-        currentAbortController = new AbortController();
-        const signal = currentAbortController.signal;
-
-        const progress = createProgressPanel(() => {
-            currentAbortController.abort();
-            progress.setStatus('已取消下载', 'cancelled');
-            removeBeforeUnload();
-        });
+        const progress = createProgressPanel();
         progress.setFilename(title + '.mp4');
 
         addBeforeUnload();
@@ -746,23 +719,11 @@
                 return;
             }
 
-            if (signal.aborted) {
-                progress.setStatus('已取消下载', 'cancelled');
-                removeBeforeUnload();
-                return;
-            }
-
             // Step 2: Fetch video and audio streams (returns immediately, downloads in background)
             progress.setStage('正在下载中...');
 
-            const video = await autoRangeFetch(videoStream.baseUrl, signal);
-            const audio = await autoRangeFetch(audioStream.baseUrl, signal);
-
-            if (signal.aborted) {
-                progress.setStatus('已取消下载', 'cancelled');
-                removeBeforeUnload();
-                return;
-            }
+            const video = await autoRangeFetch(videoStream.baseUrl);
+            const audio = await autoRangeFetch(audioStream.baseUrl);
 
             // Step 3: Send streams to remuxer
             port2.postMessage({ type: "video", stream: video.readable }, [video.readable]);
@@ -781,21 +742,17 @@
                 if (!video.progress.done || !audio.progress.done) {
                     requestAnimationFrame(tick);
                 } else {
-                    progress.setStatus('流式下载拼接中，请等待浏览器保存文件', 'success');
+                    progress.setStatus('下载完成，请等待浏览器保存文件', 'success');
                     removeBeforeUnload();
+                    // 下载成功后几秒自动收起右下角面板
+                    setTimeout(() => progress.hide(), 5000);
                 }
             }
             requestAnimationFrame(tick);
         } catch (e) {
-            if (signal.aborted) {
-                removeBeforeUnload();
-                return;
-            }
             console.error('[BiliDL] Download error:', e);
             progress.setStatus('下载失败: ' + e.message, 'error');
             removeBeforeUnload();
-        } finally {
-            currentAbortController = null;
         }
     }
 
